@@ -29,9 +29,11 @@ def to_unit(x, bounds):
 
 
 def simulate4(p_full, data):
-    # full 9 params in physical units (g/hr, m3)
+    # 9 params in physical units (g/hr, m3), or 10 with Q_thr [m3/hr] as the last one
+    p_full = np.asarray(p_full, float)
+    thr = p_full[9] if len(p_full) > 9 else FLOW_THR
     with np.errstate(all="ignore"):      # unstable params overflow, handled in the objective
-        return NH4inletModel4(np.asarray(p_full, float), data, FLOW_THR)["simNH4conc"]
+        return NH4inletModel4(p_full[:9], data, thr)["simNH4conc"]
 
 
 def evaluate(data, p_phys):
@@ -50,11 +52,13 @@ def plot_fit(data, p_phys, title, fname):
     fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 5.5),
                            gridspec_kw={"height_ratios": [3, 1]})
     ax[0].plot(data["time"], data["nh4"].where(data["valid"]), "k", lw=0.8, label="observed")
+    ax[0].plot(data["time"], data["nh4"].where(data["discard"]), color="tab:orange", lw=1.2,
+               label="gap-filled (not scored)")
     ax[0].plot(data["time"], np.asarray(sim, float)[:] * np.where(data["warmup"], np.nan, 1.0),
                "tab:red", lw=0.9, label="simulated (Model 4)")
     ax[0].axvspan(data["time"].iloc[0], data["time"][data["warmup"]].iloc[-1], color="grey", alpha=0.2, lw=0)  # warm-up
     ax[0].set_ylabel("NH4 [g/m3]"); ax[0].set_title(title, pad=34)
-    ax[0].legend(ncol=2, loc="lower center", bbox_to_anchor=(0.5, 1.0), frameon=False)   # above the data
+    ax[0].legend(ncol=3, loc="lower center", bbox_to_anchor=(0.5, 1.0), frameon=False)   # above the data
     ax[1].plot(data["time"], data["flow"], "tab:blue", lw=0.7)
     ax[1].axhline(FLOW_THR, color="k", ls="--", lw=0.8)
     ax[1].set_ylabel("Flow [m3/hr]")

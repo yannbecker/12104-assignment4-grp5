@@ -2,11 +2,11 @@
 Assignment 4
 Task 3: calibration of model 4
 
-params: [a0, a1, b1, a2, b2, c1, c2, c3, V] (flowThr passed separately)
+params: [a0, a1, b1, a2, b2, c1, c2, c3, V, Qthr]
 
 steps:
 A Fourier coefficients -> dry calibration data only (model 0)
-B c1, c2, c3, V        -> full cal set, Fourier fixed
+B c1, c2, c3, V, Qthr  -> full cal set, Fourier fixed
 C robustness (different starting points)
 """
 import sys
@@ -24,23 +24,24 @@ from model_utils import to_phys, to_unit, simulate4, evaluate, plot_fit, positio
 #   local: "Nelder-Mead", "L-BFGS-B", "Powell", "TNC", "SLSQP"
 #   global: "differential_evolution", "dual_annealing", "shgo"
 # outputs are tagged with the method name
-METHOD = sys.argv[1] if len(sys.argv) > 1 else "Nelder-Mead"     # python task3_calibration.py L-BFGS-B
+METHOD = sys.argv[1] if len(sys.argv) > 1 else "L-BFGS-B"     # python task3_calibration.py L-BFGS-B
 TAG = METHOD.lower()
 GLOBAL_METHODS = ("differential_evolution", "dual_annealing", "shgo")
 TOL = 1e-4
 NM_MAXITER = 5000          # simplex stops earlier if converged
 
-NAMES = ["a0", "a1", "b1", "a2", "b2", "c1", "c2", "c3", "V"]
+NAMES = ["a0", "a1", "b1", "a2", "b2", "c1", "c2", "c3", "V", "Qthr"]
 
 # Bounds
-# ranges from teammate (Fourier in kg/hr)
-BOUNDS_FOURIER = [(95, 130), (-42.3, -25.3), (-25.6, -1.56), (-10.88, 0), (0, 37.4)]
-BOUNDS_WET = [(0.0, 1.5),      # c1 max dilution
+# new "Your min / Your max" ranges (Fourier in kg/hr)
+BOUNDS_FOURIER = [(95, 135), (-40, -5), (-50, -1.5), (-30, 0), (-5, 25)]
+BOUNDS_WET = [(0.0, 1.0),      # c1 max dilution
               (0.0, 1.0),      # c2 timing of max dilution
-              (0.0, 20.0),     # c3 width of dilution
-              (10000., 13000.)] # V buffer volume [m3]
+              (0.1, 20.0),     # c3 width of dilution
+              (5000., 20000.), # V buffer volume [m3]
+              (4000., 6000.)]  # Q_thr wet-weather flow threshold [m3/hr]
 X0_FOURIER = np.array([124.6, -32.3, -15.6, -5.88, 17.4], float) # initial condition, fourier
-X0_WET = np.array([0.45, 0.5, 8.0, 11500.]) # initial condition, wet params
+X0_WET = np.array([0.45, 0.5, 8.0, 11500., 5000.]) # initial condition, wet params
 
 cal, val, cal_dry = load_and_split()
 
@@ -54,7 +55,7 @@ def obj_fourier(u, data):
 
 
 def obj_wet(u, data, fourier_phys):
-    # step B: free = c1, c2, c3, V (scaled), Fourier fixed
+    # step B: free = c1, c2, c3, V, Qthr (scaled), Fourier fixed
     sim = simulate4(np.concatenate([fourier_phys, to_phys(u, BOUNDS_WET)]), data)
     m = data["scored"].values
     s = np.asarray(sim)[m]
@@ -89,7 +90,7 @@ if __name__ == "__main__":
 
     # Step B
     _, wet = calibrate(obj_wet, X0_WET, BOUNDS_WET, (cal, fourier_phys))
-    p_best = np.concatenate([fourier_phys, wet])               # physical units, 9 values
+    p_best = np.concatenate([fourier_phys, wet])               # physical units, 10 values
 
     print("\nBest parameters:")
     print(pd.Series(p_best, index=NAMES).round(3).to_string())
